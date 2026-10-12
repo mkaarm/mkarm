@@ -435,15 +435,10 @@ body.sidebar-collapsed .logout-btn{
     <h1>نظام الموارد البشرية</h1>
     <p>v6 · نسخة كاملة</p>
     <form onsubmit="handleLogin(event)">
-      <div class="field"><label>اسم المستخدم</label><input id="loginUser" placeholder="admin" autofocus></div>
+      <div class="field"><label>اسم المستخدم</label><input id="loginUser" placeholder="اسم المستخدم" autofocus></div>
       <div class="field"><label>كلمة المرور</label><input id="loginPass" type="password" placeholder="••••••••"></div>
       <button class="btn primary full" type="submit">🔓 تسجيل الدخول</button>
     </form>
-    <div class="login-hint">
-      <strong>حسابات تجريبية:</strong>
-      <p>مدير: <code>admin / admin123</code></p>
-      <p>موظف: <code>employee / employee123</code></p>
-    </div>
   </div>
 </div>
 
@@ -565,7 +560,7 @@ function defaultPerms(){
 p.manager.documentRenewal={read:true,write:true,approve:true};
 p.employee.documentRenewal={read:false,write:false,approve:false};
 p.employee.engagement.write=true;
-  ['dashboard','calendar','announcements','ess','assistant','chat','geolocation'].forEach(m=>{p.employee[m]=p.employee[m]||{read:false,write:false,approve:false};p.employee[m].read=true;});
+  ['dashboard','calendar','announcements','ess','chat','geolocation'].forEach(m=>{p.employee[m]=p.employee[m]||{read:false,write:false,approve:false};p.employee[m].read=true;});
   p.employee.requests={read:true,write:true,approve:false};
   p.employee.leaves={read:true,write:true,approve:false};
   p.employee.myLeaves={read:true,write:true,approve:false};
@@ -733,7 +728,7 @@ function startApp(){
   const startView=isEmployee()?'ess':'dashboard';
   go(views[startView]&&hasPerm(startView,'read')?startView:firstAllowedView());
   renderNotifs();
-  if(hasPerm('assistant','read'))$('#assistFab').style.display='grid';
+  if(session.role==='admin'&&hasPerm('assistant','read'))$('#assistFab').style.display='grid';else{$('#assistFab').style.display='none';$('#assistPanel')?.classList.remove('open');}
 }
 function firstAllowedView(){for(const m of MODULES){if(hasPerm(m,'read'))return m;}return 'profile';}
 function updateUserChip(){
@@ -792,7 +787,7 @@ const NAV=[
   {key:'audit',label:'سجل العمليات',icon:'📋',roles:['admin']},
   {key:'profile',label:'ملفي',icon:'👤',roles:['admin','employee']},
   {key:'settings',label:'الإعدادات',icon:'⚙️',roles:['admin']},
-  {key:'assistant',label:'المساعد الذكي',icon:'🤖',roles:['admin','employee']},
+  {key:'assistant',label:'المساعد الذكي',icon:'🤖',roles:['admin']},
 ];
 function buildNav(){
   const myId=myEmpId();
@@ -1155,7 +1150,6 @@ views.ess=function(){
       <button class="btn primary" onclick="openLeaveForm()">🌴 إجازة</button>
       <button class="btn ghost" onclick="openClaimForm()">💳 مطالبة</button>
       <button class="btn ghost" onclick="go('engagement')">🎯 استبيان</button>
-      <button class="btn ghost" onclick="toggleAssistant()">🤖 المساعد</button>
     </div></div></div>`;
 };
 
@@ -1727,8 +1721,8 @@ function openEmployeeForm(id){
       </div>
       <div class="form-note">❌ الغياب</div>
       <div class="grid2">
-        <div class="field"><label>قيمة خصم الغياب (إضافة على يوم الغياب غير المدفوع)</label>${inp('ef_att_absentdeduct',attc.absentDeduct,'number','step="0.01" min="0"')}</div>
-        <div class="field"><label>الراتب اليومي (تلقائي — غير قابل للتعديل)</label><input id="ef_daily_auto" value="${empDailySalary(e)}" readonly disabled></div>
+        <div class="field"><label>يُحسب غيابًا إذا حضر بعد الساعة</label>${inp('ef_att_absentafter',attc.absentAfter,'time')}</div>
+        <div class="field"><label>قيمة خصم الغياب</label>${inp('ef_att_absentdeduct',attc.absentDeduct,'number','step="0.01" min="0"')}</div>
       </div>
     </div>
 
@@ -1844,7 +1838,8 @@ function openEmployeeForm(id){
         from:v('ef_att_from')||'08:00',to:v('ef_att_to')||'17:00',
         lateAfter:v('ef_att_late')||'08:15',lateDeduct:n('ef_att_latededuct'),
         earlyBefore:v('ef_att_early')||v('ef_att_to')||'17:00',earlyDeduct:n('ef_att_earlydeduct'),
-        absentDeduct:n('ef_att_absentdeduct')
+        absentDeduct:n('ef_att_absentdeduct'),
+        absentAfter:v('ef_att_absentafter')
       },
       passportNo:v('ef_passport').trim(),
       passportExpiry:v('ef_passport_exp'),
@@ -2013,12 +2008,12 @@ function empAttCfg(e){
     from:a.from||'08:00',to:a.to||'17:00',
     lateAfter:a.lateAfter||'08:15',lateDeduct:Number(a.lateDeduct)||0,
     earlyBefore:a.earlyBefore||a.to||'17:00',earlyDeduct:Number(a.earlyDeduct)||0,
-    absentDeduct:Number(a.absentDeduct)||0
+    absentDeduct:Number(a.absentDeduct)||0,
+    absentAfter:a.absentAfter||''
   };
 }
 function empDailySalary(e,dim){
-  const al=e?.allowances||{};
-  const tot=(Number(e?.baseSalary)||0)+(al.housing||0)+(al.transport||0)+(al.food||0)+(al.supervision||0)+(al.yearsOfService||0)+(al.seniority||0);
+  const tot=Number(e?.baseSalary)||0;
   dim=dim||new Date(attMonth.y,attMonth.m+1,0).getDate();
   return Math.round(tot/dim*100)/100;
 }
@@ -2034,6 +2029,7 @@ function attDayStatus(e,ds){
   const unpaidL=lv.some(l=>(l.payType||(l.type==='بدون راتب'?'unpaid':'paid'))==='unpaid')&&!lv.some(l=>(l.payType||(l.type==='بدون راتب'?'unpaid':'paid'))==='paid');
   const onLeave=lv.length>0||(e.weeklyOff||[]).includes(wd);
   if(rec&&rec.status!=='إجازة'&&rec.status!=='غائب'){
+    if(rec.checkIn&&cfg.absentAfter&&rec.checkIn>cfg.absentAfter)return{k:'absent',rec};
     if(rec.checkIn&&rec.checkIn>cfg.lateAfter)return{k:'late',rec};
     if(rec.checkOut&&rec.checkOut<cfg.earlyBefore)return{k:'early',rec};
     if(!rec.checkIn&&rec.status==='متأخر')return{k:'late',rec};
@@ -2095,7 +2091,7 @@ function renderMonthlyAttendance(){
   const th='style="text-align:center;white-space:nowrap;padding:6px 8px"';
   let head=`<thead><tr><th ${th}>م</th><th ${th}>الاسم</th><th ${th}>المسمى</th><th ${th}>موقع العمل</th><th ${th}>رقم الهوية</th>`;
   for(let d=1;d<=days;d++){const wd=new Date(y,m,d).getDay();head+=`<th ${th}>${AT_DAYS[wd]}<br>${String(d).padStart(2,'0')}</th>`;}
-  head+=`<th ${th}>أيام العمل</th><th ${th}>غياب</th><th ${th}>الخصومات</th><th ${th}>الراتب اليومي</th><th ${th}>إجمالي الراتب</th></tr></thead>`;
+  head+=`<th ${th}>أيام العمل</th><th ${th}>غياب</th><th ${th}>الخصومات</th><th ${th}>الراتب الأساسي</th><th ${th}>إجمالي الراتب</th></tr></thead>`;
   const tc='style="text-align:center;padding:4px 6px"';
   const body=rows.map((r,i)=>{
     const cells=r.cells.map(c=>{
@@ -2107,7 +2103,7 @@ function renderMonthlyAttendance(){
     }).join('');
     return `<tr><td ${tc}>${i+1}</td><td style="white-space:nowrap;font-weight:700;cursor:pointer;color:var(--primary)" onclick="openAttEmp('${r.e.id}')" title="عرض تفاصيل الموظف">${esc(r.e.name)}</td><td ${tc}>${esc(r.e.position||'—')}</td><td ${tc}>${esc(r.e.branch||'—')}</td><td ${tc}>${esc(r.e.nationalId||'—')}</td>${cells}
       <td ${tc}><strong>${r.worked}</strong></td><td ${tc}>${r.cnt.absent+r.cnt.unpaid}</td><td ${tc}>${r.deduct}</td>
-      <td ${tc}><input value="${r.daily}" readonly disabled style="width:80px;text-align:center" title="محسوب تلقائيًا من بيانات الموظف"></td>
+      <td ${tc}><input value="${Number(r.e.baseSalary)||0}" readonly disabled style="width:90px;text-align:center" title="من بيانات الموظف — يُعدَّل من (تعديل موظف ← الراتب)"></td>
       <td ${tc}><strong>${r.total}</strong></td></tr>`;
   }).join('');
   t.innerHTML=head+`<tbody>${body||'<tr><td colspan="40" class="empty">لا موظفون</td></tr>'}</tbody>`;
@@ -2179,8 +2175,8 @@ function attDetailView(id){
   </div>
   <div class="card" style="margin:16px 0"><div class="card-head"><h3>💰 ملخص الراتب</h3></div><div class="card-body">
     <table><tbody>
-      <tr><td>الراتب الشهري (الأساسي + البدلات)</td><td><strong>${money(r.daily*days)}</strong></td></tr>
-      <tr><td>الراتب اليومي (÷ ${days} يوم)</td><td>${money(r.daily)}</td></tr>
+      <tr><td>الراتب الأساسي</td><td><strong>${money(Number(e.baseSalary)||0)}</strong></td></tr>
+            <tr><td>الراتب اليومي (÷ ${days} يوم)</td><td>${money(r.daily)}</td></tr>
       <tr><td>الأيام المدفوعة (حضور + إجازة بمرتب)</td><td>${paid} يوم</td></tr>
       <tr><td>الاستحقاق</td><td>${money(Math.round(paid*r.daily*100)/100)}</td></tr>
       <tr><td>إجمالي الخصومات</td><td style="color:#dc2626">− ${money(sum)}</td></tr>
@@ -2198,11 +2194,11 @@ function exportMonthlyAtt(){
   const{y,m,days,marks,rows}=attComputeRows();
   let h='<tr><th>م</th><th>الاسم</th><th>المسمى</th><th>موقع العمل</th><th>رقم الهوية</th>';
   for(let d=1;d<=days;d++)h+=`<th>${AT_DAYS[new Date(y,m,d).getDay()]} ${d}</th>`;
-  h+='<th>أيام العمل</th><th>غياب</th><th>الخصومات</th><th>الراتب اليومي</th><th>إجمالي الراتب</th></tr>';
+  h+='<th>أيام العمل</th><th>غياب</th><th>الخصومات</th><th>الراتب الأساسي</th><th>إجمالي الراتب</th></tr>';
   rows.forEach((r,i)=>{
     h+=`<tr><td>${i+1}</td><td>${esc(r.e.name)}</td><td>${esc(r.e.position||'')}</td><td>${esc(r.e.branch||'')}</td><td style="mso-number-format:'@'">${esc(r.e.nationalId||'')}</td>`;
     r.cells.forEach(c=>{const k=c.st&&marks[c.st.k];h+=`<td style="text-align:center;color:${k?k.color:'#999'};font-weight:bold">${k?esc(k.sym):'-'}</td>`;});
-    h+=`<td>${r.worked}</td><td>${r.cnt.absent+r.cnt.unpaid}</td><td>${r.deduct}</td><td>${r.daily}</td><td>${r.total}</td></tr>`;
+    h+=`<td>${r.worked}</td><td>${r.cnt.absent+r.cnt.unpaid}</td><td>${r.deduct}</td><td>${Number(r.e.baseSalary)||0}</td><td>${r.total}</td></tr>`;
   });
   const html=`<html dir="rtl"><head><meta charset="utf-8"></head><body><table border="1">${h}</table></body></html>`;
   const a=document.createElement('a');
@@ -2280,7 +2276,7 @@ function empAttPreview(){
 
 views.geolocation=function(){
   const canManage=hasPerm('geolocation','write')||isAdmin(),geo=state.geo||{};
-  return `<div class="view-head"><h2>📍 المواقع GPS</h2><div class="actions"><button class="btn ghost" onclick="testMyLocation()">🧪 اختبر</button></div></div>
+  return `<div class="view-head"><h2>📍 المواقع GPS</h2><div class="actions">${isAdmin()?'<button class="btn primary" onclick="openGeoMapPicker()">🗺️ تحديد الموقع على خرائط جوجل</button>':''}<button class="btn ghost" onclick="testMyLocation()">🧪 اختبر</button></div></div>
   ${canManage?`<div class="card" style="margin-bottom:16px"><div class="card-head"><h3>⚙️ الإعدادات</h3></div>
     <div class="card-body"><div class="grid2">
       <div class="field"><label>خط عرض</label><input id="geo_lat" type="number" step="0.000001" value="${geo.companyLat||''}"></div>
@@ -2301,6 +2297,39 @@ function renderGeolocationView(){
   body.innerHTML=list.slice(0,50).map(l=>{const dt=new Date(l.timestamp);
     const typeLabel=l.type==='checkin'?'🟢 دخول':l.type==='checkout'?'🔴 انصراف':'📍';
     return `<tr><td><strong>${esc(empName(l.empId))}</strong></td><td class="muted small">${dt.toLocaleString('ar-EG',{dateStyle:'short',timeStyle:'short'})}</td><td>${typeLabel}</td><td>${l.distance!==null?l.distance+'م':'—'}</td><td><span class="geo-badge ${l.insideGeofence?'inside':'outside'}">${l.insideGeofence?'✅':'⚠️'}</span></td><td><a href="${gmapsLink(l.lat,l.lng)}" target="_blank" class="btn sm ghost">🗺️</a></td></tr>`;}).join('')||emptyRow(6,'—');
+}
+function parseLatLng(t){
+  t=String(t||'').trim();
+  let m=t.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/)||t.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/)||t.match(/[?&](?:q|ll|query|destination)=(-?\d+(?:\.\d+)?)(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/)||t.match(/^(-?\d+(?:\.\d+)?)\s*[,،\s]\s*(-?\d+(?:\.\d+)?)$/);
+  if(!m)return null;const a=+m[1],b=+m[2];
+  return(Math.abs(a)<=90&&Math.abs(b)<=180)?{lat:a,lng:b}:null;
+}
+function openGeoMapPicker(){
+  const g=state.geo||{};
+  const has=g.companyLat&&g.companyLng;
+  const url=has?`https://www.google.com/maps/search/?api=1&query=${g.companyLat},${g.companyLng}`:'https://www.google.com/maps';
+  openModal('🗺️ تحديد الموقع الأساسي',`
+    <div class="form-note"><strong>الخطوات:</strong><br>1) اضغط «فتح خرائط جوجل» ثم ضع الدبوس على المكان المطلوب (اضغط مطولًا على الجوال، أو زر الفأرة الأيمن على الكمبيوتر).<br>2) انسخ الإحداثيات التي تظهر (أو انسخ رابط الصفحة) والصقها في الحقل أدناه.<br>3) حدّد النطاق بالمتر ثم احفظ.</div>
+    <a class="btn primary full" href="${url}" target="_blank" rel="noopener" style="margin-bottom:12px;text-align:center">🗺️ فتح خرائط جوجل</a>
+    <div class="field"><label>الصق الإحداثيات أو رابط الموقع</label><input id="gp_paste" dir="ltr" placeholder="24.467, 39.611  أو  https://www.google.com/maps/@24.46,39.61,17z" oninput="geoPickPreview()" value="${has?g.companyLat+', '+g.companyLng:''}"></div>
+    <div class="muted small" id="gp_info" style="margin-bottom:10px"></div>
+    <div class="field"><label>النطاق (متر)</label><input id="gp_radius" type="number" min="10" value="${g.radius||200}"></div>
+    <button type="button" class="btn ghost full" onclick="geoPickMine()">📍 استخدم موقعي الحالي</button>`,
+    ()=>{
+      const p=parseLatLng($('#gp_paste').value);
+      if(!p){toast('⚠️ إحداثيات غير صحيحة','error');return false;}
+      const r=Number($('#gp_radius').value);if(!(r>0)){toast('⚠️ حدّد النطاق بالمتر','error');return false;}
+      state.geo={enabled:true,companyLat:p.lat,companyLng:p.lng,radius:r};
+      save();closeModal();if(currentView==='geolocation'){go('geolocation');}toast('✅ تم حفظ الموقع والنطاق','success');return true;
+    },{footerHTML:`<button class="btn ghost" onclick="closeModal()">إلغاء</button><button class="btn primary" onclick="submitModal()">💾 حفظ</button>`});
+  geoPickPreview();
+}
+function geoPickPreview(){
+  const p=parseLatLng($('#gp_paste')?.value),i=$('#gp_info');if(!i)return;
+  i.innerHTML=p?`✅ ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)} — <a href="${gmapsLink(p.lat,p.lng)}" target="_blank" rel="noopener">معاينة على الخريطة</a>`:'';
+}
+async function geoPickMine(){
+  try{const l=await getCurrentLocation();$('#gp_paste').value=l.lat.toFixed(6)+', '+l.lng.toFixed(6);geoPickPreview();}catch(e){toast('❌ '+e.message,'error');}
 }
 function saveGeoSettings(){
   const lat=Number($('#geo_lat').value),lng=Number($('#geo_lng').value);
@@ -2643,6 +2672,12 @@ views.payroll=function(){
   <div class="card table-wrap"><table><thead><tr><th>الموظف</th><th>الأساسي</th><th>البدلات</th><th>GOSI</th><th>الصافي</th></tr></thead>
     <tbody id="payBody"></tbody></table></div>`;
 };
+function openPayEmpAtt(id){
+  const pm=$('#payMonth')?.value;
+  if(pm){const[y,m]=pm.split('-').map(Number);attMonth={y,m:m-1};}
+  go('monthlyAttendance');
+  attDetailEmp=id;renderMonthlyAttendance();window.scrollTo({top:0});
+}
 function renderPayrollTable(){
   const body=$('#payBody');if(!body)return;
   const rows=state.employees.filter(e=>e.status!=='منتهي').map(e=>{
@@ -2653,7 +2688,7 @@ function renderPayrollTable(){
     return{emp:e,base,allow,gosi,net};});
   const sEl=$('#payStats');
   if(sEl)sEl.innerHTML=statCard('الموظفون',rows.length,'👥','blue')+statCard('الأساسي',money(rows.reduce((s,r)=>s+r.base,0)),'📄','purple')+statCard('GOSI',money(rows.reduce((s,r)=>s+r.gosi,0)),'🏛️','orange')+statCard('الصافي',money(rows.reduce((s,r)=>s+r.net,0)),'💰','green');
-  body.innerHTML=rows.map(r=>`<tr><td><strong>${esc(r.emp.name)}</strong></td><td>${money(r.base)}</td><td>${money(r.allow)}</td><td><span class="badge orange">− ${money(r.gosi)}</span></td><td><strong style="color:var(--green)">${money(r.net)}</strong></td></tr>`).join('')||emptyRow(5,'—');
+  body.innerHTML=rows.map(r=>`<tr><td><strong style="cursor:pointer;color:var(--primary)" onclick="openPayEmpAtt('${r.emp.id}')" title="عرض الحضور الشهري">${esc(r.emp.name)}</strong></td><td>${money(r.base)}</td><td>${money(r.allow)}</td><td><span class="badge orange">− ${money(r.gosi)}</span></td><td><strong style="color:var(--green)">${money(r.net)}</strong></td></tr>`).join('')||emptyRow(5,'—');
 }
 
 views.requests=function(){
@@ -4522,6 +4557,7 @@ function renderAssistQuick(){
   el.innerHTML=quick.map(x=>`<button class="assist-qbtn" onclick="document.getElementById('assistInput').value='${x.q}';sendAssistantMsg()">${x.l}</button>`).join('');
 }
 function toggleAssistant(){
+  if(session?.role!=='admin')return;
   assistantOpen=!assistantOpen;
   const p=$('#assistPanel'),i=$('#assistFabIcon');
   if(assistantOpen){p.classList.add('open');i.textContent='✕';if(!assistantHistory.length)initAssistant();setTimeout(()=>$('#assistInput').focus(),200);}
@@ -5047,13 +5083,11 @@ function renderIdeas(){
   const root=$('#ideasRoot');if(!root)return;
   const myId=myEmpId();
   const list=[...state.ideas].sort((a,b)=>b.date.localeCompare(a.date));
-  const myPts=list.filter(i=>i.empId===myId&&i.status==='مقبولة').length*10;
   root.innerHTML=`
     <div class="stats">
       ${statCard('الأفكار',list.length,'💡','yellow')}
       ${statCard('قيد المراجعة',list.filter(i=>i.status==='معلقة').length,'⏳','blue')}
       ${statCard('مقبولة',list.filter(i=>i.status==='مقبولة').length,'✅','green')}
-      ${statCard('نقاطي',myPts+' ⭐','🏆','purple')}
     </div>
     ${!list.length?'<div class="card"><div class="empty">لا أفكار بعد — كن الأول! 💡</div></div>':
     `<div class="two-col">${list.map(i=>{
@@ -5080,7 +5114,7 @@ function renderIdeas(){
 }
 function openIdeaForm(){
   openModal('شارك فكرتك 💡',`
-    <div class="form-note">ساهم بتحسين بيئة العمل — الأفكار المقبولة تمنحك 10 نقاط!</div>
+    <div class="form-note">ساهم بتحسين بيئة العمل بأفكارك</div>
     <div class="field"><label>العنوان *</label><input id="id_title" placeholder="عنوان مختصر"></div>
     <div class="field"><label>اشرح فكرتك *</label><textarea id="id_body" rows="5" placeholder="اشرح بالتفصيل..."></textarea></div>
   `,()=>{const t=$('#id_title').value.trim(),b=$('#id_body').value.trim();
@@ -5100,7 +5134,7 @@ function voteIdea(id,type){
 function decideIdea(id,status){
   const i=state.ideas.find(x=>x.id===id);if(!i)return;
   i.status=status;
-  if(status==='مقبولة')logAction('قبول فكرة','مكافآت','+10 نقاط لـ '+empName(i.empId));
+  if(status==='مقبولة')logAction('قبول فكرة','صندوق الأفكار',empName(i.empId));
   save();renderIdeas();renderNotifs();toast('✅','success');
 }
 
@@ -7058,6 +7092,7 @@ if(state.branches && state.branches.length){
   ['admin','manager'].forEach(r=>{if(state.permissions[r]&&!state.permissions[r].monthlyAttendance)state.permissions[r].monthlyAttendance={read:true,write:true,approve:true};});
   ['employee'].forEach(r=>{if(state.permissions[r]&&!state.permissions[r].monthlyAttendance)state.permissions[r].monthlyAttendance={read:false,write:false,approve:false};});
   if(state.permissions.employee){state.permissions.employee.disciplinary=state.permissions.employee.disciplinary||{read:true,write:false,approve:false};state.permissions.employee.disciplinary.read=true;state.permissions.employee.disciplinary.write=false;state.permissions.employee.disciplinary.approve=false;}
+  if(state.permissions.employee&&state.permissions.employee.assistant){state.permissions.employee.assistant.read=false;state.permissions.employee.assistant.write=false;}
   if(state.permissions.employee&&!state.permissions.employee.myLeaves)state.permissions.employee.myLeaves={read:true,write:true,approve:false};
   ['admin','manager'].forEach(r=>{if(state.permissions[r]&&!state.permissions[r].myLeaves)state.permissions[r].myLeaves={read:false,write:false,approve:false};});
   ['attendance','leaves','requests','claims','announcements','documents','assets','jobs','candidates','reviews','reviewCycles','channels','messages','locationLog','auditLog','deletedEmployees','surveys','surveyResponses','files','meetings','ideas','disciplinaries','contracts','debts','branches'].forEach(k=>{if(!Array.isArray(state[k]))state[k]=[];});
